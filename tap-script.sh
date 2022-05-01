@@ -76,11 +76,11 @@ else
      echo "###### Create RG for Repo  ######"
      az group create --name tap-imagerepo-RG --location $regionacr
      echo "####### Create container registry  ############"
-         echo "#####################################################################################################"
+     echo "#####################################################################################################"
      az acr create --resource-group tap-imagerepo-RG --name tapdemoacr --sku Standard
      echo "####### Fetching acr Admin credentials ##########"
      az acr update -n tapdemoacr --admin-enabled true
-         acrusername=$(az acr credential show --name tapdemoacr --query "username" -o tsv)
+     acrusername=$(az acr credential show --name tapdemoacr --query "username" -o tsv)
          acrloginserver=$(az acr show --name tapdemoacr --query loginServer -o tsv)
          acrpassword=$(az acr credential show --name tapdemoacr --query passwords[0].value -o tsv)
          if grep -q "/"  <<< "$acrpassword";
@@ -107,12 +107,12 @@ then
          echo "#########################################"
      az group create --name tap-cluster-RG --location $regionaks --subscription $subscription
          echo "#########################################"
-     echo "Creating AKS cluster with 1 node and sku as Standard_D8S_v3, can be changed if required"
+     echo "Creating 2 AKS clusters with 1 node and sku as Standard_D8S_v3, can be changed if required"
          echo "#########################################"
          az aks create --resource-group tap-cluster-RG --name tap-cluster-build --subscription $subscription --node-count 1 --enable-addons monitoring --generate-ssh-keys --node-vm-size Standard_D8S_v3 -z 1 --enable-cluster-autoscaler --min-count 1 --max-count 1
          az aks create --resource-group tap-cluster-RG --name tap-cluster-run --subscription $subscription --node-count 1 --enable-addons monitoring --generate-ssh-keys --node-vm-size Standard_D8S_v3 -z 1 --enable-cluster-autoscaler --min-count 1 --max-count 1
 
-         echo "############### Created AKS Cluster ###############"
+     echo "############### Created AKS Cluster ###############"
      echo "############### Set the context ###############"
      az account set --subscription $subscription
      az aks get-credentials --resource-group tap-cluster-RG --name tap-cluster-build
@@ -229,7 +229,7 @@ rules:
 EOF
 kubectl config get-contexts
 kubectl create ns tap-install
-kubectl create -f /home/azureuser/multi-cluster/tap-gui-viewer-service-account-rbac.yaml
+kubectl create -f $HOME/tap-multi-cluster/tap-gui-viewer-service-account-rbac.yaml
 CLUSTER_URL_BUILD=$(kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}')
 CLUSTER_TOKEN_BUILD=$(kubectl -n tap-gui get secret $(kubectl -n tap-gui get sa tap-gui-viewer -o=json | jq -r '.secrets[0].name') -o=json | jq -r '.data["token"]' | base64 --decode)
 cd $HOME/tanzu-cluster-essentials
@@ -237,12 +237,12 @@ cd $HOME/tanzu-cluster-essentials
 az aks get-credentials --resource-group tap-cluster-RG --name tap-cluster-run
 kubectl config get-contexts
 kubectl create ns tap-install
-kubectl create -f /home/azureuser/multi-cluster/tap-gui-viewer-service-account-rbac.yaml
+kubectl create -f $HOME/tap-multi-cluster/tap-gui-viewer-service-account-rbac.yaml
 CLUSTER_URL_RUN=$(kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}')
 CLUSTER_TOKEN_RUN=$(kubectl -n tap-gui get secret $(kubectl -n tap-gui get sa tap-gui-viewer -o=json | jq -r '.secrets[0].name') -o=json | jq -r '.data["token"]' | base64 --decode)
 cd $HOME/tanzu-cluster-essentials
 ./install.sh -y
-cd /home/azureuser/multi-cluster
+cd $HOME/tap-multi-cluster
 echo "######### Preparing the tap-values Build file ##########"
 cat <<EOF > tap-values-build.yaml
 profile: build
@@ -285,8 +285,8 @@ contour:
 
 appliveview_connector:
   backend:
-    sslDisabled: true
-    host: "appliveview.$cnrsdomain"
+    sslDisabled: "true"
+    host: appliveview.$cnrsdomain
 EOF
 echo "######### Preparing the tap-values View file ##########"
 cat <<EOF > tap-values-view.yaml
@@ -301,7 +301,9 @@ contour:
 metadata_store:
   app_service_type: LoadBalancer # (optional) Defaults to LoadBalancer. Change to NodePort for distributions that don't support LoadBalancer
 tap_gui:
-  service_type: LoadBalancer # NodePort for distributions that don't support LoadBalancer
+  service_type: ClusterIP # NodePort for distributions that don't support LoadBalancer
+  ingressEnabled: "true"
+  ingressDomain: "$cnrsdomain"
   app_config:
     app:
       baseUrl: http://tap-gui.$cnrsdomain
@@ -328,8 +330,8 @@ tap_gui:
               authProvider: serviceAccount
               serviceAccountToken: $CLUSTER_TOKEN_BUILD
               skipTLSVerify: true
-            - url:
-              name: $CLUSTER_URL_RUN
+            - url: $CLUSTER_URL_RUN
+              name: tap-cluster-run
               authProvider: serviceAccount
               serviceAccountToken: $CLUSTER_TOKEN_RUN
               skipTLSVerify: true
