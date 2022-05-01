@@ -248,15 +248,15 @@ cat <<EOF > tap-values-build.yaml
 profile: build
 ceip_policy_disclosed: true # Installation fails if this is set to 'false'
 buildservice:
-  kp_default_repository: "$dockerhostname/build-service" # Replace the project id with yours. In my case eknath-se is the project ID
-  kp_default_repository_username: $dockerusername
-  kp_default_repository_password: $dockerpassword
+  kp_default_repository: "$acrloginserver/build-service" # Replace the project id with yours. In my case eknath-se is the project ID
+  kp_default_repository_username: $acrusername
+  kp_default_repository_password: $acrpassword
   tanzunet_username: "$tanzunetusername" # Provide the Tanzu network user name
   tanzunet_password: "$tanzunetpassword" # Provide the Tanzu network password
 supply_chain: testing_scanning
 ootb_supply_chain_testing_scanning:
   registry:
-    server: "$dockerhostname"
+    server: "$acrloginserver"
     repository: "supply-chain" # Replace the project id with yours. In my case eknath-se is the project ID
   gitops:
     ssh_secret: ""
@@ -273,7 +273,7 @@ ceip_policy_disclosed: true # Installation fails if this is set to 'false'
 supply_chain: testing_scanning
 ootb_supply_chain_testing_scanning:
   registry:
-    server: "$dockerhostname"
+    server: "$acrloginserver"
     repository: "supply-chain" # Replace the project id with yours. In my case eknath-se is the project ID
 cnrs:
   domain_name: $cnrsdomain
