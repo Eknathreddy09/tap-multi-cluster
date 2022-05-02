@@ -337,7 +337,7 @@ tap_gui:
               skipTLSVerify: true
 appliveview:
   ingressEnabled: true
-  ingressDomain: appliveview.$cnrsdomain
+  ingressDomain: $cnrsdomain
 EOF
 echo "#####################################################################################################"
 if [ "$clusterconnecteks" == "N" ];
