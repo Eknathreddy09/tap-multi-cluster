@@ -6,9 +6,7 @@ tanzunetpassword=$(yq '.buildservice.tanzunet_password' $HOME/tap-multi-cluster/
 dockerhostname=$(yq '.ootb_supply_chain_testing_scanning.registry.server' $HOME/tap-multi-cluster/tap-values-build.yaml)
 docker login $dockerhostname -u $dockerusername -p $dockerpassword
 docker login registry.tanzu.vmware.com -u $tanzunetusername -p $tanzunetpassword
-export INSTALL_REGISTRY_USERNAME=$dockerusername
-export INSTALL_REGISTRY_PASSWORD=$dockerpassword
-export INSTALL_REGISTRY_HOSTNAME=$dockerhostname
+tanzu secret registry add tap-registry --username $dockerusername --password $dockerpassword --server $dockerhostname --export-to-all-namespaces --yes --namespace tap-install
 echo "################ Developer namespace in tap-install #####################"
 cat <<EOF > developer.yaml
 apiVersion: v1
@@ -81,7 +79,8 @@ subjects:
 - kind: Group
   name: "namespace-developers"
   apiGroup: rbac.authorization.k8s.io
----
+EOF
+cat <<EOF > scanpolicy.yaml
 apiVersion: scanning.apps.tanzu.vmware.com/v1beta1
 kind: ScanPolicy
 metadata:
@@ -117,36 +116,6 @@ cat <<EOF > ootb-supply-chain-basic-values.yaml
 grype:
   namespace: tap-install
   targetImagePullSecret: registry-credentials
-EOF
-cat <<EOF > tekton-pipeline.yaml
-apiVersion: tekton.dev/v1beta1
-kind: Pipeline
-metadata:
-  name: developer-defined-tekton-pipeline
-  labels:
-    apps.tanzu.vmware.com/pipeline: test      # (!) required
-spec:
-  params:
-    - name: source-url                        # (!) required
-    - name: source-revision                   # (!) required
-  tasks:
-    - name: test
-      params:
-        - name: source-url
-          value: $(params.source-url)
-        - name: source-revision
-          value: $(params.source-revision)
-      taskSpec:
-        params:
-          - name: source-url
-          - name: source-revision
-        steps:
-          - name: test
-            image: gradle
-            script: |-
-              cd `mktemp -d`
-              wget -qO- $(params.source-url) | tar xvz -m
-              ./mvnw test
 EOF
 echo "############### Image Copy in progress  ##################"
 echo "#################################"
@@ -184,6 +153,8 @@ echo "################### Change the context to Build cluster ##################
 echo "####################################################################################"
 kubectl config get-contexts
 kubectl config use-context tap-cluster-build
+tanzu secret registry add tap-registry --username $dockerusername --password $dockerpassword --server $dockerhostname --export-to-all-namespaces --yes --namespace tap-install
+kubectl create secret docker-registry registry-credentials --docker-server=$dockerhostname --docker-username=$dockerusername --docker-password=$dockerpassword -n tap-install
 tanzu package repository add tanzu-tap-repository --url $dockerhostname/tap-demo/tap-packages:1.1.0 --namespace tap-install
 tanzu package repository get tanzu-tap-repository --namespace tap-install
 tanzu package available list --namespace tap-install
@@ -213,6 +184,7 @@ else
   ip=$(kubectl get svc -n tap-gui -o=jsonpath='{.items[0].status.loadBalancer.ingress[0].ip}')
 fi
 kubectl apply -f developer.yaml -n tap-install
+kubectl apply -f scanpolicy.yaml -n tap-install
 kubectl apply -f tekton-pipeline.yaml -n tap-install
 tanzu package install grype-scanner --package-name grype.scanning.apps.tanzu.vmware.com --version 1.1.0  --namespace tap-install -f ootb-supply-chain-basic-values.yaml
 tanzu apps workload create tanzu-java-web-app  --git-repo https://github.com/Eknathreddy09/tanzu-java-web-app --git-branch main --type web --label apps.tanzu.vmware.com/has-tests=true --label app.kubernetes.io/part-of=tanzu-java-web-app  --type web -n tap-install --yes
@@ -222,6 +194,8 @@ echo "################### Change the context to RUN cluster ####################
 echo "####################################################################################"
 kubectl config get-contexts
 kubectl config use-context tap-cluster-run
+kubectl create secret docker-registry registry-credentials --docker-server=$dockerhostname --docker-username=$dockerusername --docker-password=$dockerpassword -n tap-install
+tanzu secret registry add tap-registry --username $dockerusername --password $dockerpassword --server $dockerhostname --export-to-all-namespaces --yes --namespace tap-install
 tanzu package repository add tanzu-tap-repository --url $dockerhostname/tap-demo/tap-packages:1.1.0 --namespace tap-install
 tanzu package repository get tanzu-tap-repository --namespace tap-install
 tanzu package available list --namespace tap-install
@@ -260,7 +234,7 @@ echo "################### Change the context to Build cluster ##################
 echo "####################################################################################"
 kubectl config get-contexts
 kubectl config use-context tap-cluster-build
-kubectl get deliverable tanzu-java-web-app --namespace $tap-install -oyaml > deliverable.yaml
+kubectl get deliverable tanzu-java-web-app --namespace tap-install -oyaml > deliverable.yaml
 yq 'del(.metadata."ownerReferences")' deliverable.yaml -i
 yq 'del(."status")' deliverable.yaml -i
 
